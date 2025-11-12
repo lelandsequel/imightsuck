@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I Might Suck - Choose Your Guru</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container landing">
+        <header>
+            <h1>🤔 I Might Suck</h1>
+            <p class="subtitle">Choose your Guru, you brave soul</p>
+        </header>
+
+        <div class="choice-section" id="guruGrid">
+            <!-- Gurus will be populated by JavaScript -->
+        </div>
+
+        <footer>
+            <p>By selecting a Guru, you confirm you are 18 years or older (for 18+ Gurus)</p>
+        </footer>
+    </div>
+
+    <script src="gurus.js"></script>
+    <script>
+        function selectGuru(guruId) {
+            localStorage.setItem('guruMode', guruId);
+            window.location.href = 'app.html';
+        }
+
+        // Populate guru cards
+        document.addEventListener('DOMContentLoaded', function() {
+            const grid = document.getElementById('guruGrid');
+            const guruOrder = ['minors', 'writer', 'therapist', 'drill', 'philosopher', 'savage'];
+            
+            guruOrder.forEach(guruId => {
+                const guru = GURUS[guruId];
+                const card = document.createElement('div');
+                card.className = `choice-card ${guru.badge === '18+' ? 'adult' : ''}`;
+                card.style.borderColor = guru.color;
+                card.onclick = () => selectGuru(guruId);
+                
+                card.innerHTML = `
+                    <div class="choice-icon">${guru.icon}</div>
+                    <h2>${guru.name}</h2>
+                    <p>${guru.description}</p>
+                    <div class="choice-badge ${guru.badge === '18+' ? 'warning' : ''}">${guru.badge}</div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        });
+    </script>
+</body>
+</html>
