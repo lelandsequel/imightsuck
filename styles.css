@@ -804,3 +804,170 @@ body {
         opacity: 1;
     }
 }
+
+/* Landing Page Styles */
+.landing-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    padding: 60px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.landing-header {
+    text-align: center;
+    margin-bottom: 60px;
+    max-width: 800px;
+}
+
+.landing-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 64px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+    line-height: 1.2;
+}
+
+.landing-subtitle {
+    font-size: 20px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.gurus-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-width: 1200px;
+    width: 100%;
+    margin-bottom: 60px;
+}
+
+.guru-card {
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.guru-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--card-accent, var(--accent-primary)), var(--accent-secondary));
+    transform: scaleX(0);
+    transition: transform 0.3s;
+}
+
+.guru-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-xl);
+    border-color: var(--card-accent, var(--accent-primary));
+}
+
+.guru-card:hover::before {
+    transform: scaleX(1);
+}
+
+.guru-card.adult {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.guru-card.adult:hover {
+    border-color: #ef4444;
+    box-shadow: 0 20px 25px -5px rgba(239, 68, 68, 0.3);
+}
+
+.guru-card-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    text-align: center;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+.guru-card-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.guru-card-description {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.guru-card-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 auto;
+    display: block;
+    width: fit-content;
+    transition: all 0.2s;
+}
+
+.guru-card:hover .guru-card-badge {
+    background: var(--card-accent, var(--accent-primary));
+    color: white;
+    border-color: var(--card-accent, var(--accent-primary));
+}
+
+.guru-card-badge.warning {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    animation: pulse 2s infinite;
+}
+
+.guru-card.adult:hover .guru-card-badge.warning {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
+.landing-footer {
+    text-align: center;
+    margin-top: auto;
+    padding-top: 40px;
+    color: var(--text-tertiary);
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .landing-title {
+        font-size: 48px;
+    }
+    
+    .gurus-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .guru-card {
+        padding: 24px 20px;
+    }
+}
