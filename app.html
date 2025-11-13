@@ -63,6 +63,14 @@
             <section class="avatar-section">
                 <div class="avatar-container" id="avatarContainer">
                     <div class="avatar-wrapper" id="avatarWrapper">
+                        <!-- D-ID Talking Avatar Video -->
+                        <video 
+                            id="didAvatar" 
+                            class="did-avatar"
+                            autoplay
+                            loop
+                            style="display: none; width: 100%; height: 100%; object-fit: contain;">
+                        </video>
                         <!-- Ready Player Me Avatar will be embedded here -->
                         <iframe 
                             id="readyPlayerMeAvatar" 
@@ -204,15 +212,6 @@
                             <label>D-ID API Key</label>
                             <input type="password" id="didKeyInput" placeholder="Enter your API key">
                             <small>Get your key at <a href="https://www.d-id.com" target="_blank">d-id.com</a></small>
-                        </div>
-                        <div class="setting-group">
-                            <label>Voice Speed: <span id="speedValue">1.0</span></label>
-                            <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1.0">
-                        </div>
-                        <div class="setting-group">
-                            <label>
-                                <input type="checkbox" id="autoPlayCheck"> Auto-play responses
-                            </label>
                         </div>
                     </div>
                 </div>

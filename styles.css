@@ -326,6 +326,44 @@ body {
     animation: pulse 1s infinite;
 }
 
+/* Avatar Speaking Animations */
+.avatar-wrapper.speaking {
+    animation: avatarFloat 2s ease-in-out infinite;
+}
+
+@keyframes avatarFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.fallback-avatar.avatar-speaking {
+    animation: avatarPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes avatarPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.fallback-avatar.avatar-speaking .avatar-placeholder path {
+    transition: d 0.15s ease;
+}
+
+/* D-ID Avatar Video */
+.did-avatar {
+    border-radius: var(--radius-xl);
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-lg);
+}
+
+.ready-player-me-avatar {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: var(--radius-xl);
+    background: var(--bg-secondary);
+}
+
 /* Chat Section */
 .chat-section {
     flex: 1;

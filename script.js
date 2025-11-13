@@ -501,6 +501,17 @@ async function speakWithElevenLabs(text) {
     const apiKey = appSettings.elevenLabsKey;
     const voiceId = currentAvatar?.voiceId || AVATARS.guru.voiceId;
     
+    // Check if D-ID is configured - if so, use D-ID for talking avatar
+    if (appSettings.avatarProvider === 'did' && appSettings.didKey) {
+        try {
+            await speakWithDID(text, apiKey, voiceId);
+            return;
+        } catch (error) {
+            console.error('D-ID error, falling back to audio only:', error);
+            // Fall through to regular ElevenLabs audio
+        }
+    }
+    
     try {
         startAvatarSpeaking();
         
@@ -554,6 +565,143 @@ async function speakWithElevenLabs(text) {
     }
 }
 
+// D-ID Talking Avatar Integration
+async function speakWithDID(text, elevenLabsKey, voiceId) {
+    const didKey = appSettings.didKey;
+    const didVideo = document.getElementById('didAvatar');
+    const fallbackAvatar = document.getElementById('fallbackAvatar');
+    const readyPlayerMeFrame = document.getElementById('readyPlayerMeAvatar');
+    
+    if (!didKey || !didVideo) {
+        throw new Error('D-ID not configured');
+    }
+    
+    try {
+        startAvatarSpeaking();
+        
+        // Hide other avatars, show D-ID video
+        if (fallbackAvatar) fallbackAvatar.style.display = 'none';
+        if (readyPlayerMeFrame) readyPlayerMeFrame.style.display = 'none';
+        didVideo.style.display = 'block';
+        
+        // First, get audio from ElevenLabs
+        const audioResponse = await fetch(`${ELEVENLABS_API_URL}/${voiceId}`, {
+            method: 'POST',
+            headers: {
+                'Accept': 'audio/mpeg',
+                'Content-Type': 'application/json',
+                'xi-api-key': elevenLabsKey
+            },
+            body: JSON.stringify({
+                text: text,
+                model_id: 'eleven_turbo_v2_5',
+                voice_settings: {
+                    stability: 0.5,
+                    similarity_boost: 0.75
+                }
+            })
+        });
+        
+        if (!audioResponse.ok) {
+            throw new Error('Failed to get audio from ElevenLabs');
+        }
+        
+        const audioBlob = await audioResponse.blob();
+        
+        // Convert audio blob to base64 for D-ID
+        const audioBase64 = await blobToBase64(audioBlob);
+        
+        // Create D-ID talk
+        const didResponse = await fetch(`${DID_API_URL}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${btoa(didKey + ':')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                source_url: 'https://d-id-public-bucket.s3.amazonaws.com/or-roman.jpg', // Default avatar, or use custom
+                script: {
+                    type: 'audio',
+                    audio_url: `data:audio/mpeg;base64,${audioBase64.split(',')[1]}`
+                },
+                config: {
+                    result_format: 'mp4'
+                }
+            })
+        });
+        
+        if (!didResponse.ok) {
+            const errorData = await didResponse.text();
+            throw new Error(`D-ID API error: ${errorData}`);
+        }
+        
+        const didData = await didResponse.json();
+        
+        // Poll for the result
+        let talkId = didData.id;
+        let videoUrl = null;
+        let attempts = 0;
+        const maxAttempts = 60; // 60 seconds max wait
+        
+        while (!videoUrl && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+            
+            const statusResponse = await fetch(`${DID_API_URL}/${talkId}`, {
+                headers: {
+                    'Authorization': `Basic ${btoa(didKey + ':')}`
+                }
+            });
+            
+            const statusData = await statusResponse.json();
+            
+            if (statusData.status === 'done' && statusData.result_url) {
+                videoUrl = statusData.result_url;
+                break;
+            } else if (statusData.status === 'error') {
+                throw new Error('D-ID generation failed');
+            }
+            
+            attempts++;
+        }
+        
+        if (!videoUrl) {
+            throw new Error('D-ID video generation timeout');
+        }
+        
+        // Play the video
+        didVideo.src = videoUrl;
+        didVideo.onended = () => {
+            stopAvatarSpeaking();
+            isSpeaking = false;
+        };
+        
+        didVideo.onerror = () => {
+            stopAvatarSpeaking();
+            isSpeaking = false;
+        };
+        
+        isSpeaking = true;
+        await didVideo.play();
+        
+    } catch (error) {
+        console.error('D-ID error:', error);
+        // Show fallback avatar
+        if (didVideo) didVideo.style.display = 'none';
+        if (fallbackAvatar) fallbackAvatar.style.display = 'flex';
+        throw error;
+    }
+}
+
+// Helper function to convert blob to base64
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 async function speakWithBrowserTTS(text) {
     if (!window.speechSynthesis) return;
     
@@ -597,18 +745,92 @@ function stopSpeech() {
 
 function startAvatarSpeaking() {
     const status = document.getElementById('avatarStatus');
+    const fallbackAvatar = document.getElementById('fallbackAvatar');
+    const avatarWrapper = document.getElementById('avatarWrapper');
+    
+    // Update status
     if (status) {
         status.classList.add('speaking');
         status.querySelector('span').textContent = 'Speaking...';
+    }
+    
+    // Animate fallback avatar
+    if (fallbackAvatar && fallbackAvatar.style.display !== 'none') {
+        fallbackAvatar.classList.add('avatar-speaking');
+        animateAvatarMouth();
+    }
+    
+    // Add speaking class to wrapper for CSS animations
+    if (avatarWrapper) {
+        avatarWrapper.classList.add('speaking');
     }
 }
 
 function stopAvatarSpeaking() {
     const status = document.getElementById('avatarStatus');
+    const fallbackAvatar = document.getElementById('fallbackAvatar');
+    const avatarWrapper = document.getElementById('avatarWrapper');
+    
+    // Update status
     if (status) {
         status.classList.remove('speaking');
         status.querySelector('span').textContent = 'Ready';
     }
+    
+    // Stop avatar animation
+    if (fallbackAvatar) {
+        fallbackAvatar.classList.remove('avatar-speaking');
+    }
+    
+    if (avatarWrapper) {
+        avatarWrapper.classList.remove('speaking');
+    }
+    
+    // Clear mouth animation interval
+    if (mouthAnimationInterval) {
+        clearInterval(mouthAnimationInterval);
+        mouthAnimationInterval = null;
+    }
+}
+
+let mouthAnimationInterval = null;
+
+function animateAvatarMouth() {
+    const fallbackAvatar = document.getElementById('fallbackAvatar');
+    if (!fallbackAvatar) return;
+    
+    const mouthPath = fallbackAvatar.querySelector('path');
+    if (!mouthPath) return;
+    
+    // Clear any existing animation
+    if (mouthAnimationInterval) {
+        clearInterval(mouthAnimationInterval);
+    }
+    
+    // Animate mouth opening/closing
+    let isOpen = false;
+    mouthAnimationInterval = setInterval(() => {
+        if (!fallbackAvatar.classList.contains('avatar-speaking')) {
+            clearInterval(mouthAnimationInterval);
+            mouthAnimationInterval = null;
+            // Reset mouth to closed
+            if (mouthPath) {
+                mouthPath.setAttribute('d', 'M 30 75 Q 60 85 90 75');
+            }
+            return;
+        }
+        
+        isOpen = !isOpen;
+        if (mouthPath) {
+            if (isOpen) {
+                // Open mouth
+                mouthPath.setAttribute('d', 'M 30 75 Q 60 95 90 75');
+            } else {
+                // Closed mouth
+                mouthPath.setAttribute('d', 'M 30 75 Q 60 85 90 75');
+            }
+        }
+    }, 150); // Change every 150ms for natural speech rhythm
 }
 
 // Voice Input
