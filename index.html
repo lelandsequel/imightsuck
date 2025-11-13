@@ -4,20 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>I Might Suck - Choose Your Guru</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container landing">
-        <header>
-            <h1>🤔 I Might Suck</h1>
-            <p class="subtitle">Choose your Guru, you brave soul</p>
+    <div class="landing-page">
+        <header class="landing-header">
+            <h1 class="landing-title">I Might Suck</h1>
+            <p class="landing-subtitle">Choose your Guru, you brave soul</p>
         </header>
 
-        <div class="choice-section" id="guruGrid">
+        <div class="gurus-grid" id="guruGrid">
             <!-- Gurus will be populated by JavaScript -->
         </div>
 
-        <footer>
+        <footer class="landing-footer">
             <p>By selecting a Guru, you confirm you are 18 years or older (for 18+ Gurus)</p>
         </footer>
     </div>
@@ -37,16 +40,18 @@
             guruOrder.forEach(guruId => {
                 const guru = GURUS[guruId];
                 const card = document.createElement('div');
-                card.className = `choice-card ${guru.badge === '18+' ? 'adult' : ''}`;
-                card.style.borderColor = guru.color;
+                card.className = `guru-card ${guru.badge === '18+' ? 'adult' : ''}`;
                 card.onclick = () => selectGuru(guruId);
                 
                 card.innerHTML = `
-                    <div class="choice-icon">${guru.icon}</div>
-                    <h2>${guru.name}</h2>
-                    <p>${guru.description}</p>
-                    <div class="choice-badge ${guru.badge === '18+' ? 'warning' : ''}">${guru.badge}</div>
+                    <div class="guru-card-icon">${guru.icon}</div>
+                    <h3 class="guru-card-title">${guru.name}</h3>
+                    <p class="guru-card-description">${guru.description}</p>
+                    <div class="guru-card-badge ${guru.badge === '18+' ? 'warning' : ''}">${guru.badge}</div>
                 `;
+                
+                // Set card accent color
+                card.style.setProperty('--card-accent', guru.color);
                 
                 grid.appendChild(card);
             });
