@@ -1,28 +1,36 @@
-// API Configuration - Together AI
+// API Configuration
 const API_KEY = 'tgp_v1_eoBpabHhovcbFrACelYaDv89YXODXl0zHxAwi3Yic6k';
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'meta-llama/Llama-3-70b-chat-hf';
 
 // ElevenLabs API Configuration
-const ELEVENLABS_API_KEY = 'YOUR_ELEVENLABS_API_KEY_HERE'; // Get from https://elevenlabs.io
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
+
+// D-ID API Configuration (for talking avatars)
+const DID_API_URL = 'https://api.d-id.com/talks';
 
 // Get guru mode from localStorage
 const GURU_ID = localStorage.getItem('guruMode') || 'writer';
 const CURRENT_GURU = GURUS[GURU_ID] || GURUS.writer;
 
-// History and stats
+// App State
 let responseHistory = JSON.parse(localStorage.getItem('responseHistory') || '[]');
 let isDarkMode = localStorage.getItem('darkMode') === 'true';
 let isTyping = false;
-
-// Voice settings
-let voiceSettings = JSON.parse(localStorage.getItem('voiceSettings') || '{"voice": "", "speed": 1.0, "pitch": 1.0, "autoPlay": false, "useElevenLabs": false}');
-let synth = window.speechSynthesis;
-let currentUtterance = null;
-let availableVoices = [];
-let currentAvatar = null;
 let isSpeaking = false;
+let currentUtterance = null;
+let currentAvatar = null;
+
+// Settings
+let appSettings = JSON.parse(localStorage.getItem('appSettings') || JSON.stringify({
+    voiceProvider: 'elevenlabs',
+    elevenLabsKey: '',
+    voiceSpeed: 1.0,
+    autoPlay: false,
+    avatarProvider: 'readyplayerme',
+    readyPlayerMeUrl: '',
+    didKey: ''
+}));
 
 // Keywords for analysis
 const positiveKeywords = [
@@ -41,65 +49,67 @@ const negativeKeywords = [
     'bad at', 'terrible', 'awful', 'horrible', 'worst'
 ];
 
-// Initialize page
+// Initialize App
 document.addEventListener('DOMContentLoaded', function() {
     if (!GURU_ID || !GURUS[GURU_ID]) {
         window.location.href = 'index.html';
         return;
     }
     
-    initializePage();
+    initializeApp();
+    setupEventListeners();
+    loadAvatar();
     updateStats();
     applyDarkMode();
-    setupEventListeners();
 });
 
-function initializePage() {
-    document.getElementById('guruTitle').textContent = `${CURRENT_GURU.icon} ${CURRENT_GURU.name}`;
+function initializeApp() {
+    document.getElementById('guruTitle').textContent = CURRENT_GURU.name;
     document.getElementById('subtitle').textContent = CURRENT_GURU.description;
     document.getElementById('initialSpeech').textContent = CURRENT_GURU.initialSpeech;
     document.getElementById('issueInput').placeholder = CURRENT_GURU.placeholder;
-    document.getElementById('askGuruBtn').textContent = CURRENT_GURU.buttonText;
-    document.body.style.setProperty('--guru-color', CURRENT_GURU.color);
     
-    // Initialize avatar
-    const avatarConfig = AVATARS[CURRENT_GURU.id] || AVATARS.guru;
-    currentAvatar = avatarConfig;
-    setupAvatar(avatarConfig);
+    // Auto-resize textarea
+    const textarea = document.getElementById('issueInput');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
 }
 
 function setupEventListeners() {
-    // Dark mode toggle
+    // Sidebar
+    document.getElementById('menuToggle').addEventListener('click', () => {
+        document.getElementById('sidebar').classList.toggle('open');
+    });
+    
+    document.getElementById('closeSidebar').addEventListener('click', () => {
+        document.getElementById('sidebar').classList.remove('open');
+    });
+    
+    // Navigation
+    document.getElementById('historyNavBtn').addEventListener('click', () => {
+        openModal('historyModal');
+        updateHistory();
+    });
+    
+    document.getElementById('settingsNavBtn').addEventListener('click', () => {
+        openModal('settingsModal');
+        loadSettings();
+    });
+    
+    // Top bar actions
+    document.getElementById('voiceSettingsBtn').addEventListener('click', () => {
+        openModal('settingsModal');
+        loadSettings();
+    });
+    
     document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
     
-    // History toggle
-    document.getElementById('historyToggle').addEventListener('click', toggleHistory);
-    
-    // Voice input (microphone)
+    // Input actions
     document.getElementById('micBtn').addEventListener('click', startVoiceInput);
-    
-    // Voice settings
-    document.getElementById('voiceSettingsBtn').addEventListener('click', toggleVoiceSettings);
-    
-    // Text-to-speech buttons
-    document.getElementById('speakBtn').addEventListener('click', () => speakCurrentResponse());
-    document.getElementById('stopBtn').addEventListener('click', stopSpeech);
-    
-    // Example button
     document.getElementById('exampleBtn').addEventListener('click', useExample);
-    
-    // Copy button
-    document.getElementById('copyBtn').addEventListener('click', copyResponse);
-    
-    // Share button
-    document.getElementById('shareBtn').addEventListener('click', shareResponse);
-    
-    // Download button
-    document.getElementById('downloadBtn').addEventListener('click', downloadResponse);
-    
-    // Voice settings controls
-    loadVoices();
-    setupVoiceSettings();
+    document.getElementById('askGuruBtn').addEventListener('click', askGuru);
     
     // Enter key to submit
     document.getElementById('issueInput').addEventListener('keydown', function(e) {
@@ -108,41 +118,155 @@ function setupEventListeners() {
             askGuru();
         }
     });
+    
+    // Modal overlay click to close
+    document.getElementById('modalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeModal();
+        }
+    });
+    
+    // Settings
+    setupSettingsListeners();
 }
 
-// Typing animation
-async function typeText(element, text, speed = 30) {
-    isTyping = true;
-    element.textContent = '';
-    for (let i = 0; i < text.length; i++) {
-        element.textContent += text[i];
-        await new Promise(resolve => setTimeout(resolve, speed));
+function setupSettingsListeners() {
+    const voiceProvider = document.getElementById('voiceProviderSelect');
+    const avatarProvider = document.getElementById('avatarProviderSelect');
+    const speedSlider = document.getElementById('speedSlider');
+    const autoPlayCheck = document.getElementById('autoPlayCheck');
+    const elevenLabsKey = document.getElementById('elevenLabsKeyInput');
+    const readyPlayerMeUrl = document.getElementById('readyPlayerMeUrl');
+    const didKey = document.getElementById('didKeyInput');
+    
+    voiceProvider.value = appSettings.voiceProvider || 'elevenlabs';
+    avatarProvider.value = appSettings.avatarProvider || 'readyplayerme';
+    speedSlider.value = appSettings.voiceSpeed || 1.0;
+    autoPlayCheck.checked = appSettings.autoPlay || false;
+    elevenLabsKey.value = appSettings.elevenLabsKey || '';
+    readyPlayerMeUrl.value = appSettings.readyPlayerMeUrl || '';
+    didKey.value = appSettings.didKey || '';
+    
+    document.getElementById('speedValue').textContent = speedSlider.value;
+    
+    voiceProvider.addEventListener('change', (e) => {
+        appSettings.voiceProvider = e.target.value;
+        saveSettings();
+    });
+    
+    avatarProvider.addEventListener('change', (e) => {
+        appSettings.avatarProvider = e.target.value;
+        saveSettings();
+        loadAvatar();
+    });
+    
+    speedSlider.addEventListener('input', (e) => {
+        appSettings.voiceSpeed = parseFloat(e.target.value);
+        document.getElementById('speedValue').textContent = e.target.value;
+        saveSettings();
+    });
+    
+    autoPlayCheck.addEventListener('change', (e) => {
+        appSettings.autoPlay = e.target.checked;
+        saveSettings();
+    });
+    
+    elevenLabsKey.addEventListener('change', (e) => {
+        appSettings.elevenLabsKey = e.target.value;
+        saveSettings();
+    });
+    
+    readyPlayerMeUrl.addEventListener('change', (e) => {
+        appSettings.readyPlayerMeUrl = e.target.value;
+        saveSettings();
+        loadAvatar();
+    });
+    
+    didKey.addEventListener('change', (e) => {
+        appSettings.didKey = e.target.value;
+        saveSettings();
+    });
+    
+    // Show/hide provider-specific settings
+    updateProviderSettings();
+    voiceProvider.addEventListener('change', updateProviderSettings);
+    avatarProvider.addEventListener('change', updateProviderSettings);
+}
+
+function updateProviderSettings() {
+    const voiceProvider = document.getElementById('voiceProviderSelect').value;
+    const avatarProvider = document.getElementById('avatarProviderSelect').value;
+    
+    document.getElementById('elevenLabsSettings').style.display = 
+        voiceProvider === 'elevenlabs' ? 'block' : 'none';
+    
+    document.getElementById('readyPlayerMeSettings').style.display = 
+        avatarProvider === 'readyplayerme' ? 'block' : 'none';
+    
+    document.getElementById('didSettings').style.display = 
+        avatarProvider === 'did' ? 'block' : 'none';
+}
+
+function loadSettings() {
+    // Settings are loaded in setupSettingsListeners
+}
+
+function saveSettings() {
+    localStorage.setItem('appSettings', JSON.stringify(appSettings));
+}
+
+// Avatar Functions
+function loadAvatar() {
+    const provider = appSettings.avatarProvider || 'readyplayerme';
+    const avatarWrapper = document.getElementById('avatarWrapper');
+    const fallbackAvatar = document.getElementById('fallbackAvatar');
+    const readyPlayerMeFrame = document.getElementById('readyPlayerMeAvatar');
+    
+    if (provider === 'readyplayerme' && appSettings.readyPlayerMeUrl) {
+        // Load Ready Player Me avatar
+        const avatarUrl = appSettings.readyPlayerMeUrl;
+        // Use Ready Player Me Web SDK or iframe
+        readyPlayerMeFrame.src = `https://readyplayer.me/avatar?frameApi`;
+        readyPlayerMeFrame.style.display = 'block';
+        fallbackAvatar.style.display = 'none';
+    } else if (provider === 'did' && appSettings.didKey) {
+        // D-ID will be handled when speaking
+        fallbackAvatar.style.display = 'flex';
+        readyPlayerMeFrame.style.display = 'none';
+    } else {
+        // Fallback avatar
+        fallbackAvatar.style.display = 'flex';
+        readyPlayerMeFrame.style.display = 'none';
     }
-    isTyping = false;
+    
+    const avatarConfig = AVATARS[CURRENT_GURU.id] || AVATARS.guru;
+    currentAvatar = avatarConfig;
 }
 
-// Main ask function
+// Main Ask Function
 async function askGuru() {
     if (isTyping) return;
     
     const input = document.getElementById('issueInput').value.trim();
-    const responseSection = document.getElementById('responseSection');
-    const responseText = document.getElementById('responseText');
-    const responseBox = document.getElementById('responseBox');
-    const guruSpeech = document.getElementById('guruSpeech');
+    const chatMessages = document.getElementById('chatMessages');
     const askBtn = document.getElementById('askGuruBtn');
-
-    if (!input) {
-        guruSpeech.innerHTML = `<p>${CURRENT_GURU.initialSpeech}</p>`;
-        return;
-    }
-
+    
+    if (!input) return;
+    
+    // Add user message
+    addMessage(input, 'user');
+    
+    // Clear input
+    document.getElementById('issueInput').value = '';
+    document.getElementById('issueInput').style.height = 'auto';
+    
+    // Show typing indicator
+    const typingId = addTypingIndicator();
+    
+    // Disable button
     askBtn.disabled = true;
-    askBtn.textContent = 'The Guru is thinking...';
-    responseSection.style.display = 'block';
-    responseText.innerHTML = '<div class="loading">The Guru is contemplating your existence...</div>';
-    guruSpeech.innerHTML = `<p>Let me think about this... *${CURRENT_GURU.avatar.includes('🧘') ? 'meditates' : 'strokes beard'}*</p>`;
-
+    isTyping = true;
+    
     try {
         let response;
         
@@ -156,7 +280,13 @@ async function askGuru() {
         } else {
             response = getFallbackResponse(input);
         }
-
+        
+        // Remove typing indicator
+        removeTypingIndicator(typingId);
+        
+        // Add guru response
+        addMessage(response.text, 'guru', response.category);
+        
         // Save to history
         const historyItem = {
             id: Date.now(),
@@ -169,33 +299,90 @@ async function askGuru() {
         responseHistory.unshift(historyItem);
         if (responseHistory.length > 50) responseHistory.pop();
         localStorage.setItem('responseHistory', JSON.stringify(responseHistory));
-
-        // Update UI with typing animation
-        responseText.textContent = '';
-        responseBox.className = 'response-box ' + (response.category === 'sucks' ? 'sucks' : response.category === 'doesntSuck' ? 'doesnt-suck' : '');
-        await typeText(responseText, response.text, 20);
         
-        guruSpeech.innerHTML = `<p>There you have it.</p>`;
+        // Update stats
         updateStats();
-        updateHistory();
         
         // Auto-play voice if enabled
-        if (voiceSettings.autoPlay) {
+        if (appSettings.autoPlay) {
             setTimeout(() => speakText(response.text), 500);
         }
         
-        setTimeout(() => {
-            responseSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 500);
-
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
     } catch (error) {
         console.error('Error:', error);
-        responseText.innerHTML = `<div class="error">Something went wrong. Try again!</div>`;
-        guruSpeech.innerHTML = `<p>Even the best of us have our moments. Try again.</p>`;
+        removeTypingIndicator(typingId);
+        addMessage('Something went wrong. Try again!', 'guru');
     } finally {
         askBtn.disabled = false;
-        askBtn.textContent = CURRENT_GURU.buttonText;
+        isTyping = false;
     }
+}
+
+function addMessage(text, type, category = null) {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}-message`;
+    
+    if (type === 'user') {
+        messageDiv.innerHTML = `
+            <div class="message-avatar">
+                <div class="mini-avatar" style="background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));"></div>
+            </div>
+            <div class="message-content">
+                <p>${escapeHtml(text)}</p>
+            </div>
+        `;
+    } else {
+        messageDiv.innerHTML = `
+            <div class="message-avatar">
+                <div class="mini-avatar" style="background: linear-gradient(135deg, ${CURRENT_GURU.color}, ${CURRENT_GURU.color}dd);"></div>
+            </div>
+            <div class="message-content ${category === 'sucks' ? 'sucks' : category === 'doesntSuck' ? 'doesnt-suck' : ''}">
+                <p>${escapeHtml(text)}</p>
+            </div>
+        `;
+    }
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    return messageDiv;
+}
+
+function addTypingIndicator() {
+    const chatMessages = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'message guru-message';
+    typingDiv.id = 'typing-indicator';
+    typingDiv.innerHTML = `
+        <div class="message-avatar">
+            <div class="mini-avatar" style="background: linear-gradient(135deg, ${CURRENT_GURU.color}, ${CURRENT_GURU.color}dd);"></div>
+        </div>
+        <div class="message-content">
+            <div class="typing-indicator">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+            </div>
+        </div>
+    `;
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return 'typing-indicator';
+}
+
+function removeTypingIndicator(id) {
+    const indicator = document.getElementById(id);
+    if (indicator) indicator.remove();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 async function callAPI(issue) {
@@ -248,7 +435,6 @@ function getFallbackResponse(issue) {
         category = Math.random() < 0.5 ? 'sucks' : 'doesntSuck';
     }
 
-    // Use guru-specific fallback responses
     const responses = getGuruFallbackResponses();
     const categoryResponses = responses[category] || responses.neutral;
     const randomResponse = categoryResponses[Math.floor(Math.random() * categoryResponses.length)];
@@ -260,7 +446,6 @@ function getFallbackResponse(issue) {
 }
 
 function getGuruFallbackResponses() {
-    // Basic fallback responses for each guru
     const base = {
         sucks: [
             "Well, {issue}? You definitely suck at this. Get your act together.",
@@ -278,7 +463,6 @@ function getGuruFallbackResponses() {
         ]
     };
     
-    // Add guru-specific responses based on personality
     if (CURRENT_GURU.id === 'writer') {
         return {
             sucks: [
@@ -298,312 +482,27 @@ function getGuruFallbackResponses() {
     return base;
 }
 
-// Stats and History
-function updateStats() {
-    const sucksCount = responseHistory.filter(h => h.category === 'sucks').length;
-    const total = responseHistory.length;
-    const suckScore = total > 0 ? Math.round((sucksCount / total) * 100) : 0;
-    
-    document.getElementById('suckScore').textContent = `${suckScore}%`;
-    document.getElementById('suckDetail').textContent = `${sucksCount} out of ${total} times`;
-    document.getElementById('statsSection').style.display = total > 0 ? 'block' : 'none';
-}
-
-function updateHistory() {
-    const historyList = document.getElementById('historyList');
-    historyList.innerHTML = '';
-    
-    responseHistory.slice(0, 20).forEach(item => {
-        const historyItem = document.createElement('div');
-        historyItem.className = 'history-item';
-        historyItem.innerHTML = `
-            <div class="history-issue">${item.issue}</div>
-            <div class="history-response ${item.category}">${item.response.substring(0, 100)}...</div>
-            <div class="history-meta">${new Date(item.timestamp).toLocaleDateString()}</div>
-        `;
-        historyItem.onclick = () => {
-            document.getElementById('issueInput').value = item.issue;
-            document.getElementById('responseText').textContent = item.response;
-            document.getElementById('responseSection').style.display = 'block';
-            toggleHistory();
-        };
-        historyList.appendChild(historyItem);
-    });
-}
-
-function toggleHistory() {
-    const panel = document.getElementById('historyPanel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    if (panel.style.display === 'block') {
-        updateHistory();
-    }
-}
-
-// Dark Mode
-function toggleDarkMode() {
-    isDarkMode = !isDarkMode;
-    localStorage.setItem('darkMode', isDarkMode);
-    applyDarkMode();
-}
-
-function applyDarkMode() {
-    if (isDarkMode) {
-        document.body.classList.add('dark-mode');
-        document.getElementById('darkModeToggle').textContent = '☀️';
-    } else {
-        document.body.classList.remove('dark-mode');
-        document.getElementById('darkModeToggle').textContent = '🌙';
-    }
-}
-
-// Voice Input (Microphone)
-function startVoiceInput() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Voice input not supported in your browser');
-        return;
-    }
-    
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    
-    const micBtn = document.getElementById('micBtn');
-    micBtn.textContent = '🎤 Listening...';
-    micBtn.disabled = true;
-    
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        document.getElementById('issueInput').value = transcript;
-        micBtn.textContent = '🎤';
-        micBtn.disabled = false;
-    };
-    
-    recognition.onerror = () => {
-        micBtn.textContent = '🎤';
-        micBtn.disabled = false;
-    };
-    
-    recognition.start();
-}
-
-// Example Problems
-function useExample() {
-    const example = EXAMPLE_PROBLEMS[Math.floor(Math.random() * EXAMPLE_PROBLEMS.length)];
-    document.getElementById('issueInput').value = example;
-}
-
-// Share/Copy/Download
-function copyResponse() {
-    const text = document.getElementById('responseText').textContent;
-    navigator.clipboard.writeText(text).then(() => {
-        alert('Copied to clipboard!');
-    });
-}
-
-function shareResponse() {
-    const text = document.getElementById('responseText').textContent;
-    const issue = document.getElementById('issueInput').value;
-    const shareText = `"${issue}"\n\n${text}`;
-    
-    if (navigator.share) {
-        navigator.share({ text: shareText });
-    } else {
-        copyResponse();
-    }
-}
-
-function downloadResponse() {
-    const text = document.getElementById('responseText').textContent;
-    const issue = document.getElementById('issueInput').value;
-    const blob = new Blob([`Issue: ${issue}\n\n${text}`], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `guru-verdict-${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-// Response Reactions
-function rateResponse(rating) {
-    const lastResponse = responseHistory[0];
-    if (lastResponse) {
-        lastResponse.rating = rating;
-        localStorage.setItem('responseHistory', JSON.stringify(responseHistory));
-        alert(`Thanks for your feedback!`);
-    }
-}
-
-// Text-to-Speech Functions
-function loadVoices() {
-    availableVoices = synth.getVoices();
-    
-    // Wait for voices to load
-    if (availableVoices.length === 0) {
-        synth.onvoiceschanged = () => {
-            availableVoices = synth.getVoices();
-            populateVoiceSelect();
-        };
-    } else {
-        populateVoiceSelect();
-    }
-}
-
-function populateVoiceSelect() {
-    const voiceSelect = document.getElementById('voiceSelect');
-    voiceSelect.innerHTML = '';
-    
-    availableVoices.forEach((voice, index) => {
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = `${voice.name} (${voice.lang})`;
-        if (voiceSettings.voice && voice.name === voiceSettings.voice) {
-            option.selected = true;
-        }
-        voiceSelect.appendChild(option);
-    });
-    
-    // Set default if no voice selected
-    if (!voiceSettings.voice && availableVoices.length > 0) {
-        // Prefer English voices
-        const englishVoice = availableVoices.find(v => v.lang.startsWith('en'));
-        if (englishVoice) {
-            voiceSelect.value = availableVoices.indexOf(englishVoice);
-        }
-    }
-}
-
-function setupVoiceSettings() {
-    const voiceSelect = document.getElementById('voiceSelect');
-    const speedSlider = document.getElementById('speedSlider');
-    const pitchSlider = document.getElementById('pitchSlider');
-    const autoPlayCheck = document.getElementById('autoPlayCheck');
-    const useElevenLabsCheck = document.getElementById('useElevenLabsCheck');
-    const elevenLabsKeyInput = document.getElementById('elevenLabsKeyInput');
-    const elevenLabsKeyGroup = document.getElementById('elevenLabsKeyGroup');
-    
-    // Set current values
-    speedSlider.value = voiceSettings.speed || 1.0;
-    pitchSlider.value = voiceSettings.pitch || 1.0;
-    autoPlayCheck.checked = voiceSettings.autoPlay || false;
-    useElevenLabsCheck.checked = voiceSettings.useElevenLabs || false;
-    elevenLabsKeyInput.value = ELEVENLABS_API_KEY !== 'YOUR_ELEVENLABS_API_KEY_HERE' ? ELEVENLABS_API_KEY : '';
-    
-    if (useElevenLabsCheck.checked) {
-        elevenLabsKeyGroup.style.display = 'block';
-    }
-    
-    document.getElementById('speedValue').textContent = speedSlider.value;
-    document.getElementById('pitchValue').textContent = pitchSlider.value;
-    
-    // Event listeners
-    voiceSelect.addEventListener('change', (e) => {
-        const selectedVoice = availableVoices[e.target.value];
-        voiceSettings.voice = selectedVoice.name;
-        localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-    });
-    
-    speedSlider.addEventListener('input', (e) => {
-        voiceSettings.speed = parseFloat(e.target.value);
-        document.getElementById('speedValue').textContent = e.target.value;
-        localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-    });
-    
-    pitchSlider.addEventListener('input', (e) => {
-        voiceSettings.pitch = parseFloat(e.target.value);
-        document.getElementById('pitchValue').textContent = e.target.value;
-        localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-    });
-    
-    autoPlayCheck.addEventListener('change', (e) => {
-        voiceSettings.autoPlay = e.target.checked;
-        localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-    });
-    
-    useElevenLabsCheck.addEventListener('change', (e) => {
-        voiceSettings.useElevenLabs = e.target.checked;
-        elevenLabsKeyGroup.style.display = e.target.checked ? 'block' : 'none';
-        localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-    });
-    
-    elevenLabsKeyInput.addEventListener('change', (e) => {
-        if (e.target.value) {
-            // Store in script (in production, use secure storage)
-            window.ELEVENLABS_API_KEY = e.target.value;
-        }
-    });
-}
-
+// Voice Functions
 async function speakText(text) {
-    if (!text) return;
+    if (!text || isSpeaking) return;
     
-    // Stop any current speech
     stopSpeech();
     
-    // Use ElevenLabs if enabled and API key is available
-    if (voiceSettings.useElevenLabs && (window.ELEVENLABS_API_KEY || ELEVENLABS_API_KEY !== 'YOUR_ELEVENLABS_API_KEY_HERE')) {
+    const provider = appSettings.voiceProvider || 'elevenlabs';
+    
+    if (provider === 'elevenlabs' && appSettings.elevenLabsKey) {
         await speakWithElevenLabs(text);
-        return;
+    } else {
+        await speakWithBrowserTTS(text);
     }
-    
-    // Fallback to browser TTS
-    if (!synth) return;
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Set voice
-    if (voiceSettings.voice) {
-        const selectedVoice = availableVoices.find(v => v.name === voiceSettings.voice);
-        if (selectedVoice) {
-            utterance.voice = selectedVoice;
-        }
-    } else if (availableVoices.length > 0) {
-        const englishVoice = availableVoices.find(v => v.lang.startsWith('en')) || availableVoices[0];
-        utterance.voice = englishVoice;
-    }
-    
-    // Set properties
-    utterance.rate = voiceSettings.speed || 1.0;
-    utterance.pitch = voiceSettings.pitch || 1.0;
-    utterance.volume = 1.0;
-    
-    currentUtterance = utterance;
-    
-    // Start avatar animation
-    startAvatarSpeaking();
-    
-    // Update UI
-    document.getElementById('speakBtn').style.display = 'none';
-    document.getElementById('stopBtn').style.display = 'inline-block';
-    
-    utterance.onend = () => {
-        stopAvatarSpeaking();
-        document.getElementById('speakBtn').style.display = 'inline-block';
-        document.getElementById('stopBtn').style.display = 'none';
-        currentUtterance = null;
-        isSpeaking = false;
-    };
-    
-    utterance.onerror = () => {
-        stopAvatarSpeaking();
-        document.getElementById('speakBtn').style.display = 'inline-block';
-        document.getElementById('stopBtn').style.display = 'none';
-        currentUtterance = null;
-        isSpeaking = false;
-    };
-    
-    synth.speak(utterance);
-    isSpeaking = true;
 }
 
 async function speakWithElevenLabs(text) {
-    const apiKey = window.ELEVENLABS_API_KEY || ELEVENLABS_API_KEY;
+    const apiKey = appSettings.elevenLabsKey;
     const voiceId = currentAvatar?.voiceId || AVATARS.guru.voiceId;
     
     try {
         startAvatarSpeaking();
-        document.getElementById('speakBtn').style.display = 'none';
-        document.getElementById('stopBtn').style.display = 'inline-block';
         
         const response = await fetch(`${ELEVENLABS_API_URL}/${voiceId}`, {
             method: 'POST',
@@ -614,11 +513,12 @@ async function speakWithElevenLabs(text) {
             },
             body: JSON.stringify({
                 text: text,
-                model_id: 'eleven_monolingual_v1',
+                model_id: 'eleven_turbo_v2_5',
                 voice_settings: {
                     stability: 0.5,
                     similarity_boost: 0.75,
-                    speed: voiceSettings.speed || 1.0
+                    style: 0.0,
+                    use_speaker_boost: true
                 }
             })
         });
@@ -633,16 +533,12 @@ async function speakWithElevenLabs(text) {
         
         audio.onended = () => {
             stopAvatarSpeaking();
-            document.getElementById('speakBtn').style.display = 'inline-block';
-            document.getElementById('stopBtn').style.display = 'none';
             URL.revokeObjectURL(audioUrl);
             isSpeaking = false;
         };
         
         audio.onerror = () => {
             stopAvatarSpeaking();
-            document.getElementById('speakBtn').style.display = 'inline-block';
-            document.getElementById('stopBtn').style.display = 'none';
             URL.revokeObjectURL(audioUrl);
             isSpeaking = false;
         };
@@ -653,144 +549,179 @@ async function speakWithElevenLabs(text) {
         
     } catch (error) {
         console.error('ElevenLabs error:', error);
-        // Fallback to browser TTS
         stopAvatarSpeaking();
-        speakText(text);
+        speakWithBrowserTTS(text);
     }
 }
 
-function speakCurrentResponse() {
-    const text = document.getElementById('responseText').textContent;
-    if (text) {
-        speakText(text);
-    }
+async function speakWithBrowserTTS(text) {
+    if (!window.speechSynthesis) return;
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+    
+    if (englishVoice) utterance.voice = englishVoice;
+    utterance.rate = appSettings.voiceSpeed || 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    startAvatarSpeaking();
+    currentUtterance = utterance;
+    isSpeaking = true;
+    
+    utterance.onend = () => {
+        stopAvatarSpeaking();
+        isSpeaking = false;
+    };
+    
+    utterance.onerror = () => {
+        stopAvatarSpeaking();
+        isSpeaking = false;
+    };
+    
+    window.speechSynthesis.speak(utterance);
 }
 
 function stopSpeech() {
-    if (synth && synth.speaking) {
-        synth.cancel();
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
     }
     if (currentUtterance && currentUtterance.pause) {
         currentUtterance.pause();
         currentUtterance.currentTime = 0;
     }
     stopAvatarSpeaking();
-    document.getElementById('speakBtn').style.display = 'inline-block';
-    document.getElementById('stopBtn').style.display = 'none';
-    currentUtterance = null;
     isSpeaking = false;
 }
 
-function toggleVoiceSettings() {
-    const panel = document.getElementById('voiceSettingsPanel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    if (panel.style.display === 'block') {
-        loadVoices();
-    }
-}
-
-// Avatar Functions
-function setupAvatar(avatarConfig) {
-    const avatarEmoji = document.getElementById('avatarEmoji');
-    const avatarWrapper = document.getElementById('avatarWrapper');
-    const canvas = document.getElementById('avatarCanvas');
-    
-    if (avatarEmoji) {
-        avatarEmoji.textContent = avatarConfig.emoji;
-    }
-    
-    if (avatarWrapper) {
-        avatarWrapper.style.setProperty('--avatar-color', avatarConfig.color);
-        avatarWrapper.className = `avatar-wrapper avatar-${avatarConfig.animation}`;
-    }
-    
-    // Draw avatar on canvas
-    drawAvatar(canvas, avatarConfig);
-}
-
-function drawAvatar(canvas, avatarConfig) {
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw avatar background circle
-    ctx.fillStyle = avatarConfig.color + '40';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 80, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw avatar face circle
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 70, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw eyes
-    ctx.fillStyle = '#333';
-    ctx.beginPath();
-    ctx.arc(centerX - 20, centerY - 10, 8, 0, Math.PI * 2);
-    ctx.arc(centerX + 20, centerY - 10, 8, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw mouth (neutral)
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY + 15, 15, 0, Math.PI);
-    ctx.stroke();
-}
-
 function startAvatarSpeaking() {
-    const avatarWrapper = document.getElementById('avatarWrapper');
-    if (avatarWrapper) {
-        avatarWrapper.classList.add('speaking');
-        animateAvatarMouth();
+    const status = document.getElementById('avatarStatus');
+    if (status) {
+        status.classList.add('speaking');
+        status.querySelector('span').textContent = 'Speaking...';
     }
 }
 
 function stopAvatarSpeaking() {
-    const avatarWrapper = document.getElementById('avatarWrapper');
-    if (avatarWrapper) {
-        avatarWrapper.classList.remove('speaking');
+    const status = document.getElementById('avatarStatus');
+    if (status) {
+        status.classList.remove('speaking');
+        status.querySelector('span').textContent = 'Ready';
     }
 }
 
-function animateAvatarMouth() {
-    if (!isSpeaking) return;
+// Voice Input
+function startVoiceInput() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Voice input not supported in your browser');
+        return;
+    }
     
-    const canvas = document.getElementById('avatarCanvas');
-    if (!canvas) return;
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.continuous = false;
+    recognition.interimResults = false;
     
-    const ctx = canvas.getContext('2d');
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    const micBtn = document.getElementById('micBtn');
+    micBtn.style.background = 'var(--accent-primary)';
+    micBtn.style.color = 'white';
+    micBtn.disabled = true;
     
-    // Redraw mouth with animation
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 70, 0, Math.PI * 2);
-    ctx.fill();
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('issueInput').value = transcript;
+        micBtn.style.background = '';
+        micBtn.style.color = '';
+        micBtn.disabled = false;
+    };
     
-    // Draw eyes
-    ctx.fillStyle = '#333';
-    ctx.beginPath();
-    ctx.arc(centerX - 20, centerY - 10, 8, 0, Math.PI * 2);
-    ctx.arc(centerX + 20, centerY - 10, 8, 0, Math.PI * 2);
-    ctx.fill();
+    recognition.onerror = () => {
+        micBtn.style.background = '';
+        micBtn.style.color = '';
+        micBtn.disabled = false;
+    };
     
-    // Animated mouth
-    const mouthSize = 10 + Math.random() * 10;
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY + 15, mouthSize, 0, Math.PI);
-    ctx.stroke();
+    recognition.start();
+}
+
+// Example Problems
+function useExample() {
+    const example = EXAMPLE_PROBLEMS[Math.floor(Math.random() * EXAMPLE_PROBLEMS.length)];
+    document.getElementById('issueInput').value = example;
+    document.getElementById('issueInput').focus();
+}
+
+// Stats
+function updateStats() {
+    const sucksCount = responseHistory.filter(h => h.category === 'sucks').length;
+    const total = responseHistory.length;
+    const suckScore = total > 0 ? Math.round((sucksCount / total) * 100) : 0;
     
-    if (isSpeaking) {
-        requestAnimationFrame(() => animateAvatarMouth());
+    document.getElementById('suckScore').textContent = `${suckScore}%`;
+    document.getElementById('totalSessions').textContent = total;
+    
+    const statsCard = document.getElementById('statsCard');
+    if (total > 0) {
+        statsCard.style.display = 'flex';
+    }
+}
+
+// History
+function updateHistory() {
+    const historyList = document.getElementById('historyList');
+    historyList.innerHTML = '';
+    
+    if (responseHistory.length === 0) {
+        historyList.innerHTML = '<p style="text-align: center; color: var(--text-tertiary); padding: 40px;">No history yet. Ask the Guru something!</p>';
+        return;
+    }
+    
+    responseHistory.slice(0, 20).forEach(item => {
+        const historyItem = document.createElement('div');
+        historyItem.className = 'history-item';
+        historyItem.innerHTML = `
+            <div class="history-issue">${escapeHtml(item.issue)}</div>
+            <div class="history-response ${item.category}">${escapeHtml(item.response.substring(0, 150))}${item.response.length > 150 ? '...' : ''}</div>
+            <div class="history-meta">${new Date(item.timestamp).toLocaleDateString()}</div>
+        `;
+        historyItem.onclick = () => {
+            document.getElementById('issueInput').value = item.issue;
+            closeModal();
+        };
+        historyList.appendChild(historyItem);
+    });
+}
+
+// Modals
+function openModal(modalId) {
+    const overlay = document.getElementById('modalOverlay');
+    const modal = document.getElementById(modalId);
+    
+    overlay.style.display = 'flex';
+    setTimeout(() => {
+        overlay.style.opacity = '1';
+    }, 10);
+}
+
+function closeModal() {
+    const overlay = document.getElementById('modalOverlay');
+    overlay.style.opacity = '0';
+    setTimeout(() => {
+        overlay.style.display = 'none';
+    }, 200);
+}
+
+// Dark Mode
+function toggleDarkMode() {
+    isDarkMode = !isDarkMode;
+    localStorage.setItem('darkMode', isDarkMode);
+    applyDarkMode();
+}
+
+function applyDarkMode() {
+    if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
     }
 }

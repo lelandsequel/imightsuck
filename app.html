@@ -4,132 +4,223 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>I Might Suck - AI Guru</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="header-top">
-                <h1 id="guruTitle">🤔 I Might Suck</h1>
-                <div class="header-controls">
-                    <button id="voiceSettingsBtn" class="icon-btn" title="Voice Settings">🎙️</button>
-                    <button id="darkModeToggle" class="icon-btn" title="Dark Mode">🌙</button>
-                    <button id="historyToggle" class="icon-btn" title="History">📜</button>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2 class="logo">I Might Suck</h2>
+                <button class="close-sidebar" id="closeSidebar">×</button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html" class="nav-item">
+                    <span class="nav-icon">🏠</span>
+                    <span>Choose Guru</span>
+                </a>
+                <button class="nav-item" id="historyNavBtn">
+                    <span class="nav-icon">📜</span>
+                    <span>History</span>
+                </button>
+                <button class="nav-item" id="settingsNavBtn">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <div class="top-bar-title">
+                    <h1 id="guruTitle">The Writer</h1>
+                    <p class="guru-subtitle" id="subtitle">Witty, literary, intelligently profane</p>
                 </div>
-            </div>
-            <p class="subtitle" id="subtitle">Ask the AI Guru if your life is a complete disaster</p>
-        </header>
-
-        <div class="guru-container">
-            <div class="guru-avatar">
-                <div class="avatar-wrapper" id="avatarWrapper">
-                    <canvas id="avatarCanvas" width="200" height="200"></canvas>
-                    <div class="avatar-emoji" id="avatarEmoji">🧙‍♂️</div>
+                <div class="top-bar-actions">
+                    <button id="voiceSettingsBtn" class="action-icon" title="Voice Settings">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </button>
+                    <button id="darkModeToggle" class="action-icon" title="Dark Mode">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
                 </div>
-            </div>
-            <div class="guru-speech" id="guruSpeech">
-                <p id="initialSpeech">Tell me your problem, and I'll tell you if you suck at life.</p>
-            </div>
-        </div>
+            </header>
 
-        <div class="input-section">
-            <div class="input-controls">
-                <button id="micBtn" class="icon-btn" title="Voice Input">🎤</button>
-                <button id="exampleBtn" class="icon-btn" title="Try Example">💡</button>
-            </div>
-            <textarea 
-                id="issueInput" 
-                placeholder="What's your problem? Spill it..."
-                rows="4"
-            ></textarea>
-            <button id="askGuruBtn" onclick="askGuru()">
-                Ask the Guru
-            </button>
-        </div>
-
-        <div class="stats-section" id="statsSection" style="display: none;">
-            <div class="stat-card">
-                <div class="stat-label">Suck Score</div>
-                <div class="stat-value" id="suckScore">0%</div>
-                <div class="stat-detail" id="suckDetail">0 out of 0 times</div>
-            </div>
-        </div>
-
-        <div class="response-section" id="responseSection" style="display: none;">
-            <div class="response-box" id="responseBox">
-                <div class="response-header">
-                    <h2>The Guru's Verdict:</h2>
-                    <div class="response-actions">
-                        <button id="speakBtn" class="action-btn" title="Read Aloud">🔊</button>
-                        <button id="stopBtn" class="action-btn" title="Stop" style="display: none;">⏹️</button>
-                        <button id="copyBtn" class="action-btn" title="Copy">📋</button>
-                        <button id="shareBtn" class="action-btn" title="Share">🔗</button>
-                        <button id="downloadBtn" class="action-btn" title="Download">💾</button>
+            <!-- Avatar Section -->
+            <section class="avatar-section">
+                <div class="avatar-container" id="avatarContainer">
+                    <div class="avatar-wrapper" id="avatarWrapper">
+                        <!-- Ready Player Me Avatar will be embedded here -->
+                        <iframe 
+                            id="readyPlayerMeAvatar" 
+                            class="ready-player-me-avatar"
+                            allow="microphone; camera"
+                            style="display: none;">
+                        </iframe>
+                        <!-- Fallback avatar -->
+                        <div class="fallback-avatar" id="fallbackAvatar">
+                            <div class="avatar-placeholder">
+                                <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+                                    <circle cx="60" cy="60" r="55" fill="currentColor" opacity="0.1"/>
+                                    <circle cx="45" cy="45" r="8" fill="currentColor"/>
+                                    <circle cx="75" cy="45" r="8" fill="currentColor"/>
+                                    <path d="M 30 75 Q 60 85 90 75" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="avatar-status" id="avatarStatus">
+                        <div class="status-indicator"></div>
+                        <span>Ready</span>
                     </div>
                 </div>
-                <p id="responseText"></p>
-                <div class="response-reactions">
-                    <button class="reaction-btn" onclick="rateResponse('accurate')">✓ Accurate</button>
-                    <button class="reaction-btn" onclick="rateResponse('harsh')">😤 Too Harsh</button>
-                    <button class="reaction-btn" onclick="rateResponse('soft')">😊 Too Soft</button>
+            </section>
+
+            <!-- Chat Interface -->
+            <section class="chat-section">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message guru-message">
+                        <div class="message-avatar">
+                            <div class="mini-avatar"></div>
+                        </div>
+                        <div class="message-content">
+                            <p id="initialSpeech">Tell me your problem, and I'll give you a brutally honest, intelligently voiced assessment of whether you suck at life.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <div class="input-actions">
+                        <button id="micBtn" class="input-action-btn" title="Voice Input">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                        </button>
+                        <button id="exampleBtn" class="input-action-btn" title="Try Example">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-wrapper">
+                        <textarea 
+                            id="issueInput" 
+                            placeholder="What's troubling you? Share your problem..."
+                            rows="1"
+                        ></textarea>
+                        <button id="askGuruBtn" class="send-btn" onclick="askGuru()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Card -->
+            <div class="stats-card" id="statsCard" style="display: none;">
+                <div class="stat-item">
+                    <div class="stat-label">Suck Score</div>
+                    <div class="stat-value" id="suckScore">0%</div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Sessions</div>
+                    <div class="stat-value" id="totalSessions">0</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Modals -->
+        <div class="modal-overlay" id="modalOverlay" style="display: none;">
+            <div class="modal" id="settingsModal">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="modal-close" onclick="closeModal()">×</button>
+                </div>
+                <div class="modal-content">
+                    <!-- Voice Settings -->
+                    <div class="settings-section">
+                        <h3>Voice Settings</h3>
+                        <div class="setting-group">
+                            <label>Voice Provider</label>
+                            <select id="voiceProviderSelect">
+                                <option value="elevenlabs">ElevenLabs (Premium)</option>
+                                <option value="browser">Browser TTS</option>
+                            </select>
+                        </div>
+                        <div class="setting-group" id="elevenLabsSettings">
+                            <label>ElevenLabs API Key</label>
+                            <input type="password" id="elevenLabsKeyInput" placeholder="Enter your API key">
+                            <small>Get your key at <a href="https://elevenlabs.io" target="_blank">elevenlabs.io</a></small>
+                        </div>
+                        <div class="setting-group">
+                            <label>Voice Speed: <span id="speedValue">1.0</span></label>
+                            <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1.0">
+                        </div>
+                        <div class="setting-group">
+                            <label>
+                                <input type="checkbox" id="autoPlayCheck"> Auto-play responses
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Avatar Settings -->
+                    <div class="settings-section">
+                        <h3>Avatar Settings</h3>
+                        <div class="setting-group">
+                            <label>Avatar Provider</label>
+                            <select id="avatarProviderSelect">
+                                <option value="readyplayerme">Ready Player Me (3D)</option>
+                                <option value="did">D-ID (Talking Avatar)</option>
+                                <option value="fallback">Simple Avatar</option>
+                            </select>
+                        </div>
+                        <div class="setting-group" id="readyPlayerMeSettings">
+                            <label>Ready Player Me Avatar URL</label>
+                            <input type="text" id="readyPlayerMeUrl" placeholder="Paste your avatar URL">
+                            <small>Create avatar at <a href="https://readyplayer.me" target="_blank">readyplayer.me</a></small>
+                        </div>
+                        <div class="setting-group" id="didSettings" style="display: none;">
+                            <label>D-ID API Key</label>
+                            <input type="password" id="didKeyInput" placeholder="Enter your API key">
+                            <small>Get your key at <a href="https://www.d-id.com" target="_blank">d-id.com</a></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" id="historyModal">
+                <div class="modal-header">
+                    <h2>Response History</h2>
+                    <button class="modal-close" onclick="closeModal()">×</button>
+                </div>
+                <div class="modal-content">
+                    <div class="history-list" id="historyList">
+                        <!-- History items will be populated here -->
+                    </div>
                 </div>
             </div>
         </div>
-
-        <div class="history-panel" id="historyPanel" style="display: none;">
-            <div class="history-header">
-                <h3>Response History</h3>
-                <button class="close-btn" onclick="toggleHistory()">×</button>
-            </div>
-            <div class="history-list" id="historyList">
-                <!-- History items will be populated here -->
-            </div>
-        </div>
-
-        <div class="voice-settings-panel" id="voiceSettingsPanel" style="display: none;">
-            <div class="history-header">
-                <h3>Voice Settings</h3>
-                <button class="close-btn" onclick="toggleVoiceSettings()">×</button>
-            </div>
-            <div class="voice-settings-content">
-                <div class="setting-group">
-                    <label>Voice:</label>
-                    <select id="voiceSelect">
-                        <!-- Populated by JavaScript -->
-                    </select>
-                </div>
-                <div class="setting-group">
-                    <label>Speed: <span id="speedValue">1.0</span></label>
-                    <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1.0">
-                </div>
-                <div class="setting-group">
-                    <label>Pitch: <span id="pitchValue">1.0</span></label>
-                    <input type="range" id="pitchSlider" min="0.5" max="2" step="0.1" value="1.0">
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="autoPlayCheck"> Auto-play responses
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="useElevenLabsCheck"> Use Premium AI Voices (ElevenLabs)
-                    </label>
-                    <small style="color: #666; display: block; margin-top: 5px;">Requires API key. Get one at elevenlabs.io</small>
-                </div>
-                <div class="setting-group" id="elevenLabsKeyGroup" style="display: none;">
-                    <label>ElevenLabs API Key:</label>
-                    <input type="password" id="elevenLabsKeyInput" placeholder="Enter your API key" style="width: 100%; padding: 8px; border: 2px solid #ddd; border-radius: 5px;">
-                </div>
-            </div>
-        </div>
-
-        <div class="back-link">
-            <a href="index.html">← Back to Guru Selection</a>
-        </div>
-
-        <footer>
-        </footer>
     </div>
 
     <script src="gurus.js"></script>
